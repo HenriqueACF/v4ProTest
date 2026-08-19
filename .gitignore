@@ -1,0 +1,23 @@
+# .NET
+bin/
+obj/
+*.user
+# node (mockups / painel)
+node_modules/
+# ambiente
+.env
+.env.*
+# binarios pesados / entrada bruta
+*.pdf
+*.docx
+# SO
+Thumbs.db
+.DS_Store
+# fora do versionamento (docs/processo/mockups/IDE)
+CLAUDE.md
+HOW-TO-WORK.md
+README.md
+app/
+docs/
+specs/
+src/.idea/

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="../tests/BksMarine.Tests/BksMarine.Tests.csproj" />
+  <Project Path="BksMarine.Api/BksMarine.Api.csproj" />
+  <Project Path="BksMarine.Application/BksMarine.Application.csproj" />
+  <Project Path="BksMarine.Core/BksMarine.Core.csproj" />
+  <Project Path="BksMarine.Infrastructure/BksMarine.Infrastructure.csproj" />
+</Solution>
