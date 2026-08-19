@@ -17,6 +17,8 @@ public static class DependencyInjection
         services.AddSingleton(jwt);
         services.AddSingleton(seed);
         services.AddSingleton<IUserRepository>(_ => new UserRepository(connectionString));
+        services.AddSingleton<IPortRepository>(_ => new PortRepository(connectionString));
+        services.AddSingleton<IBerthRepository>(_ => new BerthRepository(connectionString));
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<DatabaseInitializer>(sp => new DatabaseInitializer(

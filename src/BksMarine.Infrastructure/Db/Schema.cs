@@ -48,5 +48,27 @@ public static class Schema
         CROSS JOIN (VALUES ('Reports')) AS m(module)
         WHERE p.name = 'Common'
         ON CONFLICT DO NOTHING;
+
+        CREATE TABLE IF NOT EXISTS ports (
+            id UUID PRIMARY KEY,
+            name TEXT NOT NULL,
+            code TEXT NOT NULL UNIQUE,
+            address TEXT,
+            contact TEXT,
+            notes TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+        );
+
+        CREATE TABLE IF NOT EXISTS berths (
+            id UUID PRIMARY KEY,
+            name TEXT NOT NULL,
+            port_id UUID NOT NULL REFERENCES ports(id),
+            max_loa NUMERIC,
+            max_dwt NUMERIC,
+            type TEXT NOT NULL,
+            notes TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            UNIQUE (port_id, name)
+        );
         """;
 }

@@ -20,4 +20,5 @@ README-produto.md
 app/
 docs/
 specs/
+decisions/
 src/.idea/

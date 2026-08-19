@@ -1,6 +1,6 @@
 # BKS-Marine — README Técnico
 
-Documentação técnica do backend. Para visão de produto e fluxo de trabalho, ver [`README.md`](README.md) e [`HOW-TO-WORK.md`](HOW-TO-WORK.md).
+Documentação técnica do backend. Para visão de produto, ver [`README-produto.md`](README-produto.md) e [`HOW-TO-WORK.md`](HOW-TO-WORK.md).
 
 ## Stack
 
@@ -42,22 +42,26 @@ src/
   BksMarine.Core/
     Domain/Users/        User, Email, PasswordHash, UserAccount
     Domain/Profiles/     Profile, ProfileName, Module
-    Domain/Ports/        IUserRepository, IPasswordHasher, ITokenService, IssuedToken
+    Domain/Locations/    Port, Berth, PortCode, BerthType
+    Domain/Ports/        IUserRepository, IPasswordHasher, ITokenService,
+                         IPortRepository, IBerthRepository, IssuedToken
   BksMarine.Application/
     Common/Result.cs     Result, Result<T>, Error
     Auth/                AuthenticateUser, AuthenticateTransaction, AuthenticationResult
+    Locations/           CreatePort/Berth, UpdatePort/Berth, DeactivatePort/Berth,
+                         ListPorts, ListBerthsByPort, transactions, results
     DependencyInjection.cs
   BksMarine.Infrastructure/
-    Data/UserRepository.cs
+    Data/                UserRepository, PortRepository, BerthRepository
     Auth/                BCryptPasswordHasher, JwtTokenService
     Db/                  Schema (DDL + seed), DatabaseInitializer
     DependencyInjection.cs
   BksMarine.Api/
-    Controllers/AuthController.cs
+    Controllers/         AuthController, PortsController, BerthsController
     Program.cs
     appsettings.json
 tests/
-  BksMarine.Tests/AuthenticateUserTests.cs
+  BksMarine.Tests/       AuthenticateUserTests, CadastrosUseCaseTests
 ```
 
 ## Bounded Contexts
@@ -65,7 +69,7 @@ tests/
 | BC | Tipo | Estado |
 |----|------|--------|
 | Identidade & Acesso | Supporting | **implementado** (auth) |
-| Cadastros | Supporting | pendente (Portos, Berços) |
+| Cadastros | Supporting | **implementado** (Portos, Berços) |
 | Operações Portuárias | CORE | pendente (Atracação/Desatracação) |
 | Relatórios | Supporting | pendente (PDF, filtros) |
 
@@ -131,6 +135,45 @@ Erros:
 
 Claims do JWT: `userId`, `email`, `perfil`.
 
+## Feature implementada — Cadastros (Portos/Berços)
+
+Fonte de verdade: `specs/features/FEAT-cadastros.md`.
+
+### Domínio
+
+- **`Port`** (aggregate root): `Id`, `Name`, `Code` (VO `PortCode`, uppercase único), `Address?`, `Contact?`, `Notes?`, `IsActive`.
+- **`Berth`**: `Id`, `Name` (único por porto), `PortId` (FK), `MaxLoa?`, `MaxDwt?`, `Type` (enum `BerthType`), `Notes?`, `IsActive`.
+- **`BerthType`**: `Cargo` · `Passenger` · `Mixed`.
+- Inativação (soft delete): porto/berço **nunca são excluídos** — referenciados por operações futuras.
+
+### Use cases (pipeline Minimal, sem MediatR)
+
+`CreatePort`, `UpdatePort`, `DeactivatePort`, `ListPorts` · `CreateBerth`, `UpdateBerth`, `DeactivateBerth`, `ListBerthsByPort`.
+Cada um segue Validação → Processamento (regras de unicidade + FK) → Pós-processamento, com retorno `Result<T>`.
+
+Regras principais:
+- Código de porto **único** (case-insensitive, normalizado uppercase); berço **único por porto**.
+- `MaxLoa`/`MaxDwt` quando informados devem ser `> 0`.
+- Criar berço exige porto existente e **ativo**.
+
+### Endpoints
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| GET | `/ports?activeOnly=true` | autenticado | lista portos |
+| POST | `/ports` | Full | cria porto |
+| PUT | `/ports/{id}` | Full | atualiza porto |
+| DELETE | `/ports/{id}` | Full | inativa porto |
+| GET | `/ports/{portId}/berths` | autenticado | lista berços do porto |
+| POST | `/ports/{portId}/berths` | Full | cria berço |
+| PUT | `/berths/{id}` | Full | atualiza berço |
+| DELETE | `/berths/{id}` | Full | inativa berço |
+
+Escrita exige claim `perfil=Full` (policy `configuration`); leitura aceita qualquer token válido.
+
+Erros principais: `validation.*` → 400 · `locations.port.not_found` / `locations.berth.not_found` → 404 ·
+`locations.port.code_duplicate` / `locations.berth.name_duplicate` / `locations.port.inactive` → 409.
+
 ## Banco de dados
 
 Schema e seed em [`src/BksMarine.Infrastructure/Db/Schema.cs`](src/BksMarine.Infrastructure/Db/Schema.cs), aplicados de forma idempotente pelo `DatabaseInitializer` na subida (dev).
@@ -140,6 +183,11 @@ profiles        (id uuid PK, name text UNIQUE)
 users           (id uuid PK, email text UNIQUE, password_hash text,
                  profile_id uuid FK → profiles, is_active bool DEFAULT TRUE)
 profile_modules (profile_id uuid FK → profiles, module text, PK (profile_id, module))
+ports           (id uuid PK, name text, code text UNIQUE, address text, contact text,
+                 notes text, is_active bool DEFAULT TRUE)
+berths          (id uuid PK, name text, port_id uuid FK → ports,
+                 max_loa numeric, max_dwt numeric, type text, notes text,
+                 is_active bool DEFAULT TRUE, UNIQUE (port_id, name))
 ```
 
 Seed estático: 3 perfis + mapeamento de módulos (`Full` → 3 módulos, `Operational` → 2, `Common` → 1).
@@ -166,7 +214,7 @@ Via `appsettings.json` ou variável de ambiente (override padrão do ASP.NET).
 # build
 dotnet build src/BksMarine.slnx
 
-# testes (9 unitários — ports fake in-memory, sem banco)
+# testes (27 unitários — ports fake in-memory, sem banco)
 dotnet test src/BksMarine.slnx
 
 # executar (precisa de Postgres/Supabase acessível)
@@ -180,27 +228,33 @@ export ConnectionStrings__Postgres="Host=...;Port=...;Database=...;Username=...;
 
 ## Decisões técnicas (resumo ADR)
 
-| # | Decisão | Status |
-|---|---------|--------|
-| D1 | Acesso a dados: **Dapper** (não EF Core) | decidido |
-| D2 | **MultiProject** (Core/Application/Infrastructure/Api) | decidido |
-| D3 | Idioma do código: **inglês** | decidido |
-| D4 | **Auth própria no .NET** (JWT + bcrypt), Supabase só Postgres/Storage | decidido |
+| ADR | Decisão | Status |
+|-----|---------|--------|
+| 0001 | Stack base: **.NET 10 + Supabase** (Postgres + Storage) | aceito |
+| 0002 | **Auth própria no .NET** (JWT + bcrypt), Supabase só Postgres/Storage | aceito |
+| 0003 | Acesso a dados: **Dapper** | aceito |
+| 0004 | Estrutura **MultiProject** (Core/Application/Infrastructure/Api) | aceito |
+| 0005 | Idioma do código: **inglês** | aceito |
 | D5–D12 | RLS x RBAC, fotos Storage, transmissão, PDF, escopo repo, multi-tenant, refresh token, menu no login vs `/me` | em aberto |
 
-> Ver [`docs/design/decisoes-abertas.md`](docs/design/decisoes-abertas.md) para o detalhamento.
+> ADRs em [`decisions/`](decisions/). Detalhamento das abertas em [`docs/design/decisoes-abertas.md`](docs/design/decisoes-abertas.md).
 
 ## Testes
 
-`tests/BksMarine.Tests/AuthenticateUserTests.cs` cobre os critérios de aceite do FEAT com fakes in-memory:
+**27 testes** (`tests/BksMarine.Tests/`, ports fake in-memory, sem banco):
 
+`AuthenticateUserTests` — critérios do FEAT-autenticacao:
 - login válido → token + menu correto por perfil (`Full`/`Operational`/`Common`)
 - senha errada / e-mail inexistente / usuário inativo → `auth.invalid_credentials` (genérico)
 - e-mail inválido → `validation.email`; senha ausente → `validation.password`
 
+`CadastrosUseCaseTests` — critérios do FEAT-cadastros:
+- criação/atualização de porto; código duplicado; inativação; lista com `activeOnly`
+- criação de berço; nome duplicado (mesmo porto vs porto diferente); porto inexistente/inativo;
+  capacidade inválida; lista por porto
+
 ## Próximos passos
 
-1. Conectar Postgres/Supabase real e validar login de ponta a ponta.
-2. Implementar **Cadastros** (Portos, Berços) — próxima feature do fluxo.
-3. Formalizar ADRs das decisões fechadas em `decisions/`.
-4. Fechar decisões em aberto D5–D12 antes das features que as envolvem (fotos, transmissão, relatórios).
+1. Conectar Postgres/Supabase real e validar login + cadastros de ponta a ponta.
+2. Implementar **Operações (CORE)** — atracação/desatracação.
+3. Fechar decisões em aberto D5–D12 antes das features que as envolvem (fotos, transmissão, relatórios).
