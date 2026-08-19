@@ -1,0 +1,51 @@
+using BksMarine.Core.Domain.Operations;
+
+namespace BksMarine.Application.Operations;
+
+public sealed record RegisterOperationTransaction(
+    OperationType Type,
+    Guid ShipId,
+    Guid PortId,
+    Guid BerthId,
+    string? AgencyName,
+    string? PilotName,
+    DateTime? PilotBoardingTime,
+    string? TugBowName,
+    DateTime? TugBowTime,
+    string? TugSternName,
+    DateTime? TugSternTime,
+    DateTime? FirstLineTime,
+    DateTime? LastLineTime,
+    decimal? DraftBow,
+    decimal? DraftMidship,
+    decimal? DraftStern,
+    Side? Side,
+    string? Notes,
+    DateTime OccurredAt,
+    DateTime? UndockingTime,
+    IReadOnlyList<string> Photos);
+
+public sealed record OperationResult(
+    Guid Id,
+    OperationType Type,
+    Guid ShipId,
+    Guid PortId,
+    Guid BerthId,
+    string? AgencyName,
+    string? PilotName,
+    DateTime? PilotBoardingTime,
+    string? TugBowName,
+    DateTime? TugBowTime,
+    string? TugSternName,
+    DateTime? TugSternTime,
+    DateTime? FirstLineTime,
+    DateTime? LastLineTime,
+    decimal? DraftBow,
+    decimal? DraftMidship,
+    decimal? DraftStern,
+    Side? Side,
+    string? Notes,
+    DateTime OccurredAt,
+    DateTime? UndockingTime,
+    IReadOnlyList<string> Photos,
+    TransmissionStatus TransmissionStatus);

@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BksMarine.Application\BksMarine.Application.csproj" />
     <ProjectReference Include="..\..\src\BksMarine.Core\BksMarine.Core.csproj" />
+    <ProjectReference Include="..\..\src\BksMarine.Infrastructure\BksMarine.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

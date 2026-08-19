@@ -126,7 +126,7 @@ public sealed class AuthenticateUserTests
     private static UserAccount Account(string email, ProfileName name, string password, bool active = true)
     {
         var profile = new Profile(Guid.NewGuid(), name, ModulesFor(name));
-        var user = new User(Guid.NewGuid(), new Email(email), new PasswordHash(password), profile.Id, active);
+        var user = new User(Guid.NewGuid(), "Test User", null, new Email(email), new PasswordHash(password), profile.Id, active);
         return new UserAccount(user, profile);
     }
 
@@ -145,6 +145,22 @@ public sealed class AuthenticateUserTests
 
         public Task<UserAccount?> GetByEmailAsync(Email email, CancellationToken ct = default) =>
             Task.FromResult(_account is not null && _account.User.Email.Value == email.Value ? _account : null);
+
+        public Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(_account is not null && _account.User.Id == id ? _account : null);
+
+        public Task<List<UserAccount>> ListAsync(bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_account is null ? new List<UserAccount>() : new List<UserAccount> { _account });
+
+        public Task AddAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task UpdateAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<Profile?> GetProfileByIdAsync(Guid profileId, CancellationToken ct = default) =>
+            Task.FromResult(_account is not null && _account.Profile.Id == profileId ? _account.Profile : null);
+
+        public Task<List<Profile>> GetAllProfilesAsync(CancellationToken ct = default) =>
+            Task.FromResult(_account is null ? new List<Profile>() : new List<Profile> { _account.Profile });
     }
 
     private sealed class FakePasswordHasher : IPasswordHasher

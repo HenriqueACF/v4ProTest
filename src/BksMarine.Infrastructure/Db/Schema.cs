@@ -10,11 +10,16 @@ public static class Schema
 
         CREATE TABLE IF NOT EXISTS users (
             id UUID PRIMARY KEY,
+            name TEXT NOT NULL DEFAULT '',
+            job_title TEXT,
             email TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             profile_id UUID NOT NULL REFERENCES profiles(id),
             is_active BOOLEAN NOT NULL DEFAULT TRUE
         );
+
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS job_title TEXT;
 
         CREATE TABLE IF NOT EXISTS profile_modules (
             profile_id UUID NOT NULL REFERENCES profiles(id),
@@ -69,6 +74,41 @@ public static class Schema
             notes TEXT,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             UNIQUE (port_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS ships (
+            id UUID PRIMARY KEY,
+            name TEXT NOT NULL,
+            loa NUMERIC NOT NULL,
+            dwt NUMERIC NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE
+        );
+
+        CREATE TABLE IF NOT EXISTS operations (
+            id UUID PRIMARY KEY,
+            type TEXT NOT NULL,
+            ship_id UUID NOT NULL REFERENCES ships(id),
+            port_id UUID NOT NULL REFERENCES ports(id),
+            berth_id UUID NOT NULL REFERENCES berths(id),
+            agency_name TEXT,
+            pilot_name TEXT,
+            pilot_boarding_time TIMESTAMPTZ,
+            tug_bow_name TEXT,
+            tug_bow_time TIMESTAMPTZ,
+            tug_stern_name TEXT,
+            tug_stern_time TIMESTAMPTZ,
+            first_line_time TIMESTAMPTZ,
+            last_line_time TIMESTAMPTZ,
+            draft_bow NUMERIC,
+            draft_midship NUMERIC,
+            draft_stern NUMERIC,
+            side TEXT,
+            notes TEXT,
+            occurred_at TIMESTAMPTZ NOT NULL,
+            undocking_time TIMESTAMPTZ,
+            photos TEXT[] NOT NULL DEFAULT '{}',
+            transmission_status TEXT NOT NULL DEFAULT 'NotTransmitted',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         """;
 }
