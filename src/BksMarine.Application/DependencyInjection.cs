@@ -11,7 +11,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddSingleton(new AuthThrottleOptions());
         services.AddSingleton<IAuthenticateUser, AuthenticateUser>();
+        services.AddSingleton<IRefreshSession, RefreshSession>();
+        services.AddSingleton<ILogoutSession, LogoutSession>();
+        services.AddSingleton<IResetPassword, ResetPassword>();
 
         services.AddSingleton<ICreateShip, CreateShip>();
         services.AddSingleton<IUpdateShip, UpdateShip>();
@@ -19,7 +23,7 @@ public static class DependencyInjection
         services.AddSingleton<IListShips, ListShips>();
         services.AddSingleton<IRegisterOperation, RegisterOperation>();
         services.AddSingleton<IListOperations, ListOperations>();
-        services.AddSingleton<IGetOperation, GetOperation>();
+        services.AddSingleton<IGetOperationDetail, GetOperationDetail>();
         services.AddSingleton<IMarkTransmitted, MarkTransmitted>();
         services.AddSingleton<IGenerateOperationReport, GenerateOperationReport>();
 

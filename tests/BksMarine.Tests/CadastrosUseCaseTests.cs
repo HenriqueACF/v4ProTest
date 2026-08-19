@@ -122,8 +122,8 @@ public sealed class CadastrosUseCaseTests
         var active = (await useCase.ExecuteAsync(true)).Value!;
         var all = (await useCase.ExecuteAsync(false)).Value!;
 
-        Assert.Single(active);
-        Assert.Equal(2, all.Count);
+        Assert.Single(active.Items);
+        Assert.Equal(2, all.Items.Count);
     }
 
     // ---- Berço ----
@@ -218,8 +218,8 @@ public sealed class CadastrosUseCaseTests
         var active = (await useCase.ExecuteAsync(port, true)).Value!;
         var all = (await useCase.ExecuteAsync(port, false)).Value!;
 
-        Assert.Single(active);
-        Assert.Equal(2, all.Count);
+        Assert.Single(active.Items);
+        Assert.Equal(2, all.Items.Count);
     }
 
     [Fact]
@@ -260,8 +260,11 @@ public sealed class CadastrosUseCaseTests
         public Task<Port?> GetByCodeAsync(string code, CancellationToken ct = default) =>
             Task.FromResult(_ports.FirstOrDefault(p => p.Code.Value == code.ToUpperInvariant()));
 
-        public Task<List<Port>> ListAsync(bool activeOnly, CancellationToken ct = default) =>
-            Task.FromResult(_ports.Where(p => !activeOnly || p.IsActive).ToList());
+        public Task<List<Port>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default) =>
+            Task.FromResult(_ports.Where(p => !activeOnly || p.IsActive).Skip((page - 1) * pageSize).Take(pageSize).ToList());
+
+        public Task<int> CountAsync(bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_ports.Count(p => !activeOnly || p.IsActive));
 
         public Task AddAsync(Port port, CancellationToken ct = default)
         {
@@ -292,8 +295,11 @@ public sealed class CadastrosUseCaseTests
         public Task<Berth?> GetByNameInPortAsync(string name, Guid portId, CancellationToken ct = default) =>
             Task.FromResult(_berths.FirstOrDefault(b => b.Name == name && b.PortId == portId));
 
-        public Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default) =>
-            Task.FromResult(_berths.Where(b => b.PortId == portId && (!activeOnly || b.IsActive)).ToList());
+        public Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, int page, int pageSize, CancellationToken ct = default) =>
+            Task.FromResult(_berths.Where(b => b.PortId == portId && (!activeOnly || b.IsActive)).Skip((page - 1) * pageSize).Take(pageSize).ToList());
+
+        public Task<int> CountByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_berths.Count(b => b.PortId == portId && (!activeOnly || b.IsActive)));
 
         public Task AddAsync(Berth berth, CancellationToken ct = default)
         {

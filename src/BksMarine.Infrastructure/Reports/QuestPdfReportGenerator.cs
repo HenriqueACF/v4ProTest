@@ -41,6 +41,7 @@ public sealed class QuestPdfReportGenerator : IReportGenerator
                             c.RelativeColumn(1.6f); // navio
                             c.RelativeColumn(1.2f); // porto
                             c.RelativeColumn(1.2f); // berço
+                            c.RelativeColumn(1.2f); // responsável
                             c.RelativeColumn(1.4f); // status
                         });
 
@@ -51,6 +52,7 @@ public sealed class QuestPdfReportGenerator : IReportGenerator
                             header.Cell().Element(HeaderCell).Text("Navio");
                             header.Cell().Element(HeaderCell).Text("Porto");
                             header.Cell().Element(HeaderCell).Text("Berço");
+                            header.Cell().Element(HeaderCell).Text("Responsável");
                             header.Cell().Element(HeaderCell).Text("Transmissão");
                         });
 
@@ -61,6 +63,7 @@ public sealed class QuestPdfReportGenerator : IReportGenerator
                             table.Cell().Text(row.ShipName);
                             table.Cell().Text(row.PortName);
                             table.Cell().Text(row.BerthName);
+                            table.Cell().Text(string.IsNullOrWhiteSpace(row.ResponsibleName) ? "—" : row.ResponsibleName);
                             table.Cell().Text(row.TransmissionStatus == TransmissionStatus.Transmitted ? "Transmitida" : "Não transmitida");
                         }
                     });
@@ -101,6 +104,7 @@ public sealed class QuestPdfReportGenerator : IReportGenerator
         if (data.To is not null) parts.Add($"até {data.To:dd/MM/yyyy}");
         if (data.Type is not null) parts.Add(data.Type == OperationType.Docking ? "atracação" : "desatracação");
         if (data.PortId is not null) parts.Add($"porto {data.PortId}");
+        if (data.ResponsibleUserId is not null) parts.Add($"responsável {data.ResponsibleUserId}");
         parts.Add($"{data.Rows.Count} operação(ões)");
         return string.Join(" · ", parts);
     }

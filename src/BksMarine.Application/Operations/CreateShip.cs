@@ -24,6 +24,10 @@ public sealed class CreateShip : ICreateShip
         if (txc.Dwt <= 0)
             return Result<ShipResult>.Fail(new Error("validation.dwt", "DWT must be greater than zero."));
 
+        // Processing
+        if (await _ships.GetByNameAsync(txc.Name.Trim(), ct) is not null)
+            return Result<ShipResult>.Fail(new Error("operations.ship_name_duplicate", "Ship name already in use."));
+
         var ship = new Ship(Guid.NewGuid(), txc.Name.Trim(), txc.Loa, txc.Dwt, isActive: true);
         await _ships.AddAsync(ship, ct);
 

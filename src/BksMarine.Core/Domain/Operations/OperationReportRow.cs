@@ -7,5 +7,6 @@ public sealed record OperationReportRow(
     string ShipName,
     string PortName,
     string BerthName,
+    string? ResponsibleName,
     TransmissionStatus TransmissionStatus,
     IReadOnlyList<string> Photos);

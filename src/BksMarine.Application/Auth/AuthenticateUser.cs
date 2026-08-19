@@ -14,12 +14,24 @@ public sealed class AuthenticateUser : IAuthenticateUser
     private readonly IUserRepository _users;
     private readonly IPasswordHasher _hasher;
     private readonly ITokenService _tokens;
+    private readonly ILoginAttemptRepository _loginAttempts;
+    private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly AuthThrottleOptions _throttle;
 
-    public AuthenticateUser(IUserRepository users, IPasswordHasher hasher, ITokenService tokens)
+    public AuthenticateUser(
+        IUserRepository users,
+        IPasswordHasher hasher,
+        ITokenService tokens,
+        ILoginAttemptRepository loginAttempts,
+        IRefreshTokenRepository refreshTokens,
+        AuthThrottleOptions throttle)
     {
         _users = users;
         _hasher = hasher;
         _tokens = tokens;
+        _loginAttempts = loginAttempts;
+        _refreshTokens = refreshTokens;
+        _throttle = throttle;
     }
 
     public async Task<Result<AuthenticationResult>> AuthenticateAsync(
@@ -32,18 +44,27 @@ public sealed class AuthenticateUser : IAuthenticateUser
         if (string.IsNullOrWhiteSpace(txc.PlainPassword))
             return Result<AuthenticationResult>.Fail(new Error("validation.password", "A password is required."));
 
-        // Pipeline stage 2 — Processing (generic error: no account enumeration)
+        var now = DateTime.UtcNow;
+
+        // Stage 2 — Throttle (bloqueio por tentativas)
+        var failures = await _loginAttempts.CountRecentFailuresAsync(
+            txc.Email, now.AddMinutes(-_throttle.WindowMinutes), ct);
+        if (failures >= _throttle.MaxFailures)
+            return Result<AuthenticationResult>.Fail(new Error("auth.throttled", "Too many failed attempts. Try again later."));
+
+        // Stage 3 — Processing (credenciais; erro genérico: anti-enumeração)
         var account = await _users.GetByEmailAsync(new Email(txc.Email), ct);
         var valid = account is not null
             && account.User.IsActive
             && _hasher.Verify(txc.PlainPassword, account.User.PasswordHash);
+
+        await _loginAttempts.RegisterAsync(txc.Email, valid, now, ct);
         if (!valid)
             return Result<AuthenticationResult>.Fail(new Error("auth.invalid_credentials", "Invalid credentials."));
+        await _loginAttempts.ClearAsync(txc.Email, ct);
 
-        // Pipeline stage 3 — Post-processing (issue JWT, build menu)
-        var token = _tokens.Issue(account!.User, account.Profile);
-        var menu = account.Profile.AllowedModules.OrderBy(m => m).ToList();
-        var result = new AuthenticationResult(token.Token, token.ExpiresAt, account.Profile.Name, menu);
-        return Result<AuthenticationResult>.Ok(result);
+        // Stage 4 — Post-processing (access + refresh)
+        return Result<AuthenticationResult>.Ok(
+            await AuthResultFactory.BuildAsync(account!, now, _throttle, _refreshTokens, _tokens, ct));
     }
 }

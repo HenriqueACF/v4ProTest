@@ -5,4 +5,5 @@ public sealed record OperationReportData(
     DateTime? To,
     OperationType? Type,
     Guid? PortId,
+    Guid? ResponsibleUserId,
     IReadOnlyList<OperationReportRow> Rows);

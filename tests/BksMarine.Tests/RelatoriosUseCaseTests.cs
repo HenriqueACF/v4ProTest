@@ -16,7 +16,7 @@ public sealed class RelatoriosUseCaseTests
         var generator = new FakeReportGenerator();
         var useCase = new GenerateOperationReport(repo, generator);
 
-        var result = await useCase.ExecuteAsync(null, null, null, null);
+        var result = await useCase.ExecuteAsync(null, null, null, null, null);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(new byte[] { 0x25, 0x50, 0x44, 0x46 }, result.Value!.Content);
@@ -33,7 +33,7 @@ public sealed class RelatoriosUseCaseTests
         var from = DateTime.UtcNow.AddDays(-7);
         var to = DateTime.UtcNow;
 
-        await useCase.ExecuteAsync(OperationType.Docking, from, to, PortId);
+        await useCase.ExecuteAsync(OperationType.Docking, from, to, PortId, null);
 
         Assert.Equal(OperationType.Docking, repo.LastType);
         Assert.Equal(from, repo.LastFrom);
@@ -45,7 +45,7 @@ public sealed class RelatoriosUseCaseTests
     public async Task Invalid_period_fails()
     {
         var useCase = new GenerateOperationReport(new FakeOperationRepository(), new FakeReportGenerator());
-        var result = await useCase.ExecuteAsync(null, DateTime.UtcNow, DateTime.UtcNow.AddDays(-1), null);
+        var result = await useCase.ExecuteAsync(null, DateTime.UtcNow, DateTime.UtcNow.AddDays(-1), null, null);
         Assert.True(result.IsFailure);
         Assert.Equal("validation.period", result.Error!.Code);
     }
@@ -54,7 +54,7 @@ public sealed class RelatoriosUseCaseTests
     public async Task Empty_result_still_generates()
     {
         var useCase = new GenerateOperationReport(new FakeOperationRepository(), new FakeReportGenerator());
-        var result = await useCase.ExecuteAsync(null, null, null, null);
+        var result = await useCase.ExecuteAsync(null, null, null, null, null);
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value!.Content);
     }
@@ -63,7 +63,7 @@ public sealed class RelatoriosUseCaseTests
     public async Task QuestPdf_generates_valid_pdf()
     {
         var generator = new Infrastructure.Reports.QuestPdfReportGenerator(Path.GetTempPath());
-        var data = new OperationReportData(null, null, null, null, new List<OperationReportRow> { OneRow() });
+        var data = new OperationReportData(null, null, null, null, null, new List<OperationReportRow> { OneRow() });
 
         var pdf = await generator.GenerateAsync(data);
 
@@ -75,7 +75,7 @@ public sealed class RelatoriosUseCaseTests
     }
 
     private static OperationReportRow OneRow() =>
-        new(Guid.NewGuid(), DateTime.UtcNow, OperationType.Docking, "Pomone", "Santos", "B1",
+        new(Guid.NewGuid(), DateTime.UtcNow, OperationType.Docking, "Pomone", "Santos", "B1", "Ana",
             TransmissionStatus.NotTransmitted, new List<string>());
 
     private sealed class FakeReportGenerator : IReportGenerator
@@ -105,10 +105,13 @@ public sealed class RelatoriosUseCaseTests
         public Task<Operation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_operations.FirstOrDefault(o => o.Id == id));
 
-        public Task<List<Operation>> ListAsync(OperationType? type, DateTime? from, DateTime? to, CancellationToken ct = default) =>
+        public Task<List<Operation>> ListAsync(OperationType? type, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct = default) =>
             Task.FromResult(_operations);
 
-        public Task<List<OperationReportRow>> ListReportAsync(OperationType? type, DateTime? from, DateTime? to, Guid? portId, CancellationToken ct = default)
+        public Task<int> CountAsync(OperationType? type, DateTime? from, DateTime? to, CancellationToken ct = default) =>
+            Task.FromResult(_operations.Count);
+
+        public Task<List<OperationReportRow>> ListReportAsync(OperationType? type, DateTime? from, DateTime? to, Guid? portId, Guid? responsibleUserId, CancellationToken ct = default)
         {
             LastType = type;
             LastFrom = from;

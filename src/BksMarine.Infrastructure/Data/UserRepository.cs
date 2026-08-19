@@ -43,18 +43,39 @@ public sealed class UserRepository : IUserRepository
         return row is null ? null : await MapAsync(connection, row);
     }
 
-    public async Task<List<UserAccount>> ListAsync(bool activeOnly, CancellationToken ct = default)
+    public async Task<List<UserAccount>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default)
     {
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(ct);
 
-        var sql = activeOnly ? AccountSelect + " WHERE u.is_active = TRUE ORDER BY u.name" : AccountSelect + " ORDER BY u.name";
-        var rows = await connection.QueryAsync<UserRow>(sql);
+        var sql = (activeOnly ? AccountSelect + " WHERE u.is_active = TRUE" : AccountSelect)
+            + " ORDER BY u.name LIMIT @Limit OFFSET @Offset";
+        var rows = await connection.QueryAsync<UserRow>(sql, new
+        {
+            Limit = pageSize,
+            Offset = (page - 1) * pageSize
+        });
 
         var accounts = new List<UserAccount>();
         foreach (var row in rows)
             accounts.Add(await MapAsync(connection, row));
         return accounts;
+    }
+
+    public async Task<int> CountAsync(bool activeOnly, CancellationToken ct = default)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        var sql = activeOnly ? "SELECT COUNT(*) FROM users WHERE is_active = TRUE" : "SELECT COUNT(*) FROM users";
+        return await connection.ExecuteScalarAsync<int>(sql);
+    }
+
+    public async Task UpdatePasswordAsync(Guid userId, PasswordHash hash, CancellationToken ct = default)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        await connection.ExecuteAsync(
+            "UPDATE users SET password_hash = @Hash WHERE id = @Id", new { Id = userId, Hash = hash.Value });
     }
 
     public async Task AddAsync(User user, CancellationToken ct = default)

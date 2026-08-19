@@ -19,6 +19,14 @@ public sealed class ShipRepository : IShipRepository
             "SELECT id, name, loa, dwt, is_active AS IsActive FROM ships WHERE id = @Id", new { Id = id });
     }
 
+    public async Task<Ship?> GetByNameAsync(string name, CancellationToken ct = default)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        return await connection.QueryFirstOrDefaultAsync<Ship>(
+            "SELECT id, name, loa, dwt, is_active AS IsActive FROM ships WHERE name = @Name", new { Name = name });
+    }
+
     public async Task<List<Ship>> ListAsync(bool activeOnly, CancellationToken ct = default)
     {
         await using var connection = new NpgsqlConnection(_connectionString);

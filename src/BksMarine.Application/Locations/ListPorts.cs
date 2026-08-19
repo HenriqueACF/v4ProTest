@@ -5,7 +5,7 @@ namespace BksMarine.Application.Locations;
 
 public interface IListPorts
 {
-    Task<Result<List<PortResult>>> ExecuteAsync(bool activeOnly = true, CancellationToken ct = default);
+    Task<Result<PageResult<PortResult>>> ExecuteAsync(bool activeOnly = true, int? page = null, int? pageSize = null, CancellationToken ct = default);
 }
 
 public sealed class ListPorts : IListPorts
@@ -14,9 +14,12 @@ public sealed class ListPorts : IListPorts
 
     public ListPorts(IPortRepository ports) => _ports = ports;
 
-    public async Task<Result<List<PortResult>>> ExecuteAsync(bool activeOnly = true, CancellationToken ct = default)
+    public async Task<Result<PageResult<PortResult>>> ExecuteAsync(bool activeOnly = true, int? page = null, int? pageSize = null, CancellationToken ct = default)
     {
-        var ports = await _ports.ListAsync(activeOnly, ct);
-        return Result<List<PortResult>>.Ok(ports.Select(CreatePort.ToResult).ToList());
+        var (p, ps) = Paging.Normalize(page, pageSize);
+        var total = await _ports.CountAsync(activeOnly, ct);
+        var ports = await _ports.ListAsync(activeOnly, p, ps, ct);
+        return Result<PageResult<PortResult>>.Ok(new PageResult<PortResult>(
+            ports.Select(CreatePort.ToResult).ToList(), p, ps, total));
     }
 }

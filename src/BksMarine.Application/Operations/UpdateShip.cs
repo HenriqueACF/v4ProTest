@@ -28,6 +28,10 @@ public sealed class UpdateShip : IUpdateShip
         if (ship is null)
             return Result<ShipResult>.Fail(new Error("operations.ship_not_found", "Ship not found."));
 
+        var existing = await _ships.GetByNameAsync(txc.Name.Trim(), ct);
+        if (existing is not null && existing.Id != txc.Id)
+            return Result<ShipResult>.Fail(new Error("operations.ship_name_duplicate", "Ship name already in use."));
+
         var updated = new Ship(ship.Id, txc.Name.Trim(), txc.Loa, txc.Dwt, ship.IsActive);
         await _ships.UpdateAsync(updated, ct);
 

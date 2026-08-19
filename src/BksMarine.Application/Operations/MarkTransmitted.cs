@@ -31,7 +31,7 @@ public sealed class MarkTransmitted : IMarkTransmitted
 
     internal static Operation Rebuild(Operation o, TransmissionStatus status) =>
         new(
-            o.Id, o.Type, o.ShipId, o.PortId, o.BerthId,
+            o.Id, o.Type, o.ShipId, o.PortId, o.BerthId, o.ResponsibleUserId,
             o.AgencyName, o.PilotName, o.PilotBoardingTime,
             o.TugBowName, o.TugBowTime, o.TugSternName, o.TugSternTime,
             o.FirstLineTime, o.LastLineTime,

@@ -7,6 +7,7 @@ public sealed class Operation
     public Guid ShipId { get; }
     public Guid PortId { get; }
     public Guid BerthId { get; }
+    public Guid? ResponsibleUserId { get; }
     public string? AgencyName { get; }
     public string? PilotName { get; }
     public DateTime? PilotBoardingTime { get; }
@@ -33,6 +34,7 @@ public sealed class Operation
         Guid shipId,
         Guid portId,
         Guid berthId,
+        Guid? responsibleUserId,
         string? agencyName,
         string? pilotName,
         DateTime? pilotBoardingTime,
@@ -58,6 +60,7 @@ public sealed class Operation
         ShipId = shipId;
         PortId = portId;
         BerthId = berthId;
+        ResponsibleUserId = responsibleUserId;
         AgencyName = agencyName;
         PilotName = pilotName;
         PilotBoardingTime = pilotBoardingTime;

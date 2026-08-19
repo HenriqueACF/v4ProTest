@@ -12,14 +12,14 @@ public sealed class OperationsController : ControllerBase
 {
     private readonly IRegisterOperation _register;
     private readonly IListOperations _list;
-    private readonly IGetOperation _get;
+    private readonly IGetOperationDetail _get;
     private readonly IMarkTransmitted _transmit;
     private readonly IGenerateOperationReport _report;
 
     public OperationsController(
         IRegisterOperation register,
         IListOperations list,
-        IGetOperation get,
+        IGetOperationDetail get,
         IMarkTransmitted transmit,
         IGenerateOperationReport report)
     {
@@ -37,9 +37,10 @@ public sealed class OperationsController : ControllerBase
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
         [FromQuery] Guid? portId = null,
+        [FromQuery] Guid? responsibleUserId = null,
         CancellationToken ct = default)
     {
-        var result = await _report.ExecuteAsync(type, from, to, portId, ct);
+        var result = await _report.ExecuteAsync(type, from, to, portId, responsibleUserId, ct);
         if (result.IsFailure)
             return BadRequest(new { error = result.Error!.Message });
         return File(result.Value!.Content, "application/pdf", result.Value.FileName);
@@ -51,9 +52,11 @@ public sealed class OperationsController : ControllerBase
         [FromQuery] OperationType? type = null,
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
         CancellationToken ct = default)
     {
-        var result = await _list.ExecuteAsync(type, from, to, ct);
+        var result = await _list.ExecuteAsync(type, from, to, page, pageSize, ct);
         return Ok(result.Value);
     }
 
@@ -85,7 +88,7 @@ public sealed class OperationsController : ControllerBase
 
     private static RegisterOperationTransaction ToTransaction(RegisterOperationRequest r) =>
         new(
-            r.Type, r.ShipId, r.PortId, r.BerthId, r.AgencyName, r.PilotName, r.PilotBoardingTime,
+            r.Type, r.ShipId, r.PortId, r.BerthId, r.ResponsibleUserId, r.AgencyName, r.PilotName, r.PilotBoardingTime,
             r.TugBowName, r.TugBowTime, r.TugSternName, r.TugSternTime,
             r.FirstLineTime, r.LastLineTime, r.DraftBow, r.DraftMidship, r.DraftStern,
             r.Side, r.Notes, r.OccurredAt, r.UndockingTime, r.Photos ?? Array.Empty<string>());
@@ -104,6 +107,7 @@ public sealed record RegisterOperationRequest(
     Guid ShipId,
     Guid PortId,
     Guid BerthId,
+    Guid? ResponsibleUserId,
     string? AgencyName,
     string? PilotName,
     DateTime? PilotBoardingTime,

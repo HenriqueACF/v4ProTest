@@ -32,17 +32,32 @@ public sealed class BerthRepository : IBerthRepository
         return row is null ? null : Map(row);
     }
 
-    public async Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default)
+    public async Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, int page, int pageSize, CancellationToken ct = default)
     {
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(ct);
 
         var sql = activeOnly
-            ? "SELECT * FROM berths WHERE port_id = @PortId AND is_active = TRUE ORDER BY name"
-            : "SELECT * FROM berths WHERE port_id = @PortId ORDER BY name";
+            ? "SELECT * FROM berths WHERE port_id = @PortId AND is_active = TRUE ORDER BY name LIMIT @Limit OFFSET @Offset"
+            : "SELECT * FROM berths WHERE port_id = @PortId ORDER BY name LIMIT @Limit OFFSET @Offset";
 
-        var rows = await connection.QueryAsync<BerthRow>(sql, new { PortId = portId });
+        var rows = await connection.QueryAsync<BerthRow>(sql, new
+        {
+            PortId = portId,
+            Limit = pageSize,
+            Offset = (page - 1) * pageSize
+        });
         return rows.Select(Map).ToList();
+    }
+
+    public async Task<int> CountByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        var sql = activeOnly
+            ? "SELECT COUNT(*) FROM berths WHERE port_id = @PortId AND is_active = TRUE"
+            : "SELECT COUNT(*) FROM berths WHERE port_id = @PortId";
+        return await connection.ExecuteScalarAsync<int>(sql, new { PortId = portId });
     }
 
     public async Task AddAsync(Berth berth, CancellationToken ct = default)

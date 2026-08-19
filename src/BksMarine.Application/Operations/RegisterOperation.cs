@@ -19,19 +19,22 @@ public sealed class RegisterOperation : IRegisterOperation
     private readonly IPortRepository _ports;
     private readonly IBerthRepository _berths;
     private readonly IStorageClient _storage;
+    private readonly IUserRepository _users;
 
     public RegisterOperation(
         IOperationRepository operations,
         IShipRepository ships,
         IPortRepository ports,
         IBerthRepository berths,
-        IStorageClient storage)
+        IStorageClient storage,
+        IUserRepository users)
     {
         _operations = operations;
         _ships = ships;
         _ports = ports;
         _berths = berths;
         _storage = storage;
+        _users = users;
     }
 
     public async Task<Result<OperationResult>> ExecuteAsync(RegisterOperationTransaction txc, CancellationToken ct = default)
@@ -71,6 +74,10 @@ public sealed class RegisterOperation : IRegisterOperation
         if (berth.PortId != txc.PortId)
             return Result<OperationResult>.Fail(new Error("operations.berth_not_in_port", "Berth does not belong to the informed port."));
 
+        if (txc.ResponsibleUserId is not null
+            && await _users.GetByIdAsync(txc.ResponsibleUserId.Value, ct) is null)
+            return Result<OperationResult>.Fail(new Error("operations.responsible_not_found", "Responsible user not found."));
+
         // Stage 3 — Processing (save photos, persist)
         var photoUrls = new List<string>();
         foreach (var photo in txc.Photos)
@@ -94,6 +101,7 @@ public sealed class RegisterOperation : IRegisterOperation
             txc.ShipId,
             txc.PortId,
             txc.BerthId,
+            txc.ResponsibleUserId,
             txc.AgencyName,
             txc.PilotName,
             txc.PilotBoardingTime,
@@ -121,7 +129,7 @@ public sealed class RegisterOperation : IRegisterOperation
 
     internal static OperationResult ToResult(Operation operation) =>
         new(
-            operation.Id, operation.Type, operation.ShipId, operation.PortId, operation.BerthId,
+            operation.Id, operation.Type, operation.ShipId, operation.PortId, operation.BerthId, operation.ResponsibleUserId,
             operation.AgencyName, operation.PilotName, operation.PilotBoardingTime,
             operation.TugBowName, operation.TugBowTime, operation.TugSternName, operation.TugSternTime,
             operation.FirstLineTime, operation.LastLineTime,

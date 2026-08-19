@@ -1,8 +1,15 @@
 namespace BksMarine.Infrastructure.Db;
 
-public static class Schema
+public sealed record Migration(string Version, string Sql);
+
+public static class Migrations
 {
-    public const string Sql = """
+    public static readonly IReadOnlyList<Migration> All = new[]
+    {
+        new Migration("001_baseline", BaselineSql)
+    };
+
+    public const string BaselineSql = """
         CREATE TABLE IF NOT EXISTS profiles (
             id UUID PRIMARY KEY,
             name TEXT NOT NULL UNIQUE
@@ -90,6 +97,7 @@ public static class Schema
             ship_id UUID NOT NULL REFERENCES ships(id),
             port_id UUID NOT NULL REFERENCES ports(id),
             berth_id UUID NOT NULL REFERENCES berths(id),
+            responsible_user_id UUID REFERENCES users(id),
             agency_name TEXT,
             pilot_name TEXT,
             pilot_boarding_time TIMESTAMPTZ,
@@ -108,6 +116,23 @@ public static class Schema
             undocking_time TIMESTAMPTZ,
             photos TEXT[] NOT NULL DEFAULT '{}',
             transmission_status TEXT NOT NULL DEFAULT 'NotTransmitted',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+
+        ALTER TABLE operations ADD COLUMN IF NOT EXISTS responsible_user_id UUID REFERENCES users(id);
+
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            email TEXT NOT NULL,
+            attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            success BOOLEAN NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS refresh_tokens (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id),
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            revoked_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
         """;

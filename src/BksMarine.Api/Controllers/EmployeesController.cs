@@ -27,9 +27,13 @@ public sealed class EmployeesController : ControllerBase
 
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> List([FromQuery] bool activeOnly = true, CancellationToken ct = default)
+    public async Task<IActionResult> List(
+        [FromQuery] bool activeOnly = true,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        CancellationToken ct = default)
     {
-        var result = await _list.ExecuteAsync(activeOnly, ct);
+        var result = await _list.ExecuteAsync(activeOnly, page, pageSize, ct);
         return Ok(result.Value);
     }
 

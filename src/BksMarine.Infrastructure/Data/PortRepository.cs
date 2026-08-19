@@ -31,17 +31,29 @@ public sealed class PortRepository : IPortRepository
         return row is null ? null : Map(row);
     }
 
-    public async Task<List<Port>> ListAsync(bool activeOnly, CancellationToken ct = default)
+    public async Task<List<Port>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default)
     {
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(ct);
 
         var sql = activeOnly
-            ? "SELECT * FROM ports WHERE is_active = TRUE ORDER BY name"
-            : "SELECT * FROM ports ORDER BY name";
+            ? "SELECT * FROM ports WHERE is_active = TRUE ORDER BY name LIMIT @Limit OFFSET @Offset"
+            : "SELECT * FROM ports ORDER BY name LIMIT @Limit OFFSET @Offset";
 
-        var rows = await connection.QueryAsync<PortRow>(sql);
+        var rows = await connection.QueryAsync<PortRow>(sql, new
+        {
+            Limit = pageSize,
+            Offset = (page - 1) * pageSize
+        });
         return rows.Select(Map).ToList();
+    }
+
+    public async Task<int> CountAsync(bool activeOnly, CancellationToken ct = default)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        var sql = activeOnly ? "SELECT COUNT(*) FROM ports WHERE is_active = TRUE" : "SELECT COUNT(*) FROM ports";
+        return await connection.ExecuteScalarAsync<int>(sql);
     }
 
     public async Task AddAsync(Port port, CancellationToken ct = default)

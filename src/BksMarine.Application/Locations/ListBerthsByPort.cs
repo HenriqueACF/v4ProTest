@@ -5,7 +5,7 @@ namespace BksMarine.Application.Locations;
 
 public interface IListBerthsByPort
 {
-    Task<Result<List<BerthResult>>> ExecuteAsync(Guid portId, bool activeOnly = true, CancellationToken ct = default);
+    Task<Result<PageResult<BerthResult>>> ExecuteAsync(Guid portId, bool activeOnly = true, int? page = null, int? pageSize = null, CancellationToken ct = default);
 }
 
 public sealed class ListBerthsByPort : IListBerthsByPort
@@ -14,9 +14,12 @@ public sealed class ListBerthsByPort : IListBerthsByPort
 
     public ListBerthsByPort(IBerthRepository berths) => _berths = berths;
 
-    public async Task<Result<List<BerthResult>>> ExecuteAsync(Guid portId, bool activeOnly = true, CancellationToken ct = default)
+    public async Task<Result<PageResult<BerthResult>>> ExecuteAsync(Guid portId, bool activeOnly = true, int? page = null, int? pageSize = null, CancellationToken ct = default)
     {
-        var berths = await _berths.ListByPortAsync(portId, activeOnly, ct);
-        return Result<List<BerthResult>>.Ok(berths.Select(CreateBerth.ToResult).ToList());
+        var (p, ps) = Paging.Normalize(page, pageSize);
+        var total = await _berths.CountByPortAsync(portId, activeOnly, ct);
+        var berths = await _berths.ListByPortAsync(portId, activeOnly, p, ps, ct);
+        return Result<PageResult<BerthResult>>.Ok(new PageResult<BerthResult>(
+            berths.Select(CreateBerth.ToResult).ToList(), p, ps, total));
     }
 }

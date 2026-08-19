@@ -15,7 +15,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(account),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("admin@bksmarine.com", "secret"));
@@ -36,7 +39,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(account),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("user@bksmarine.com", "secret"));
@@ -52,7 +58,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(account),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("admin@bksmarine.com", "wrong"));
@@ -68,7 +77,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(account),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("nobody@bksmarine.com", "secret"));
@@ -84,7 +96,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(account),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("admin@bksmarine.com", "secret"));
@@ -99,7 +114,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("not-an-email", "secret"));
@@ -114,7 +132,10 @@ public sealed class AuthenticateUserTests
         var useCase = new AuthenticateUser(
             new FakeUserRepository(),
             new FakePasswordHasher(),
-            new FakeTokenService());
+            new FakeTokenService(),
+            new FakeLoginAttempts(),
+            new FakeRefreshTokens(),
+            new AuthThrottleOptions());
 
         var result = await useCase.AuthenticateAsync(
             new AuthenticateTransaction("admin@bksmarine.com", ""));
@@ -149,12 +170,17 @@ public sealed class AuthenticateUserTests
         public Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_account is not null && _account.User.Id == id ? _account : null);
 
-        public Task<List<UserAccount>> ListAsync(bool activeOnly, CancellationToken ct = default) =>
+        public Task<List<UserAccount>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default) =>
             Task.FromResult(_account is null ? new List<UserAccount>() : new List<UserAccount> { _account });
+
+        public Task<int> CountAsync(bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_account is null ? 0 : 1);
 
         public Task AddAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task UpdateAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task UpdatePasswordAsync(Guid userId, PasswordHash hash, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task<Profile?> GetProfileByIdAsync(Guid profileId, CancellationToken ct = default) =>
             Task.FromResult(_account is not null && _account.Profile.Id == profileId ? _account.Profile : null);
@@ -173,5 +199,19 @@ public sealed class AuthenticateUserTests
     {
         public IssuedToken Issue(User user, Profile profile) =>
             new("fake-token", DateTime.UtcNow.AddHours(8));
+    }
+
+    private sealed class FakeLoginAttempts : ILoginAttemptRepository
+    {
+        public Task RegisterAsync(string email, bool success, DateTime attemptedAt, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<int> CountRecentFailuresAsync(string email, DateTime since, CancellationToken ct = default) => Task.FromResult(0);
+        public Task ClearAsync(string email, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class FakeRefreshTokens : IRefreshTokenRepository
+    {
+        public Task SaveAsync(RefreshToken token, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<RefreshToken?> GetByHashAsync(string tokenHash, CancellationToken ct = default) => Task.FromResult<RefreshToken?>(null);
+        public Task RevokeAsync(Guid id, DateTime revokedAt, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

@@ -14,11 +14,14 @@ public static class DependencyInjection
         this IServiceCollection services,
         string connectionString,
         JwtOptions jwt,
-        SeedAdminOptions seed)
+        SeedAdminOptions seed,
+        bool seedDemoEnabled)
     {
         services.AddSingleton(jwt);
         services.AddSingleton(seed);
         services.AddSingleton<IUserRepository>(_ => new UserRepository(connectionString));
+        services.AddSingleton<ILoginAttemptRepository>(_ => new LoginAttemptRepository(connectionString));
+        services.AddSingleton<IRefreshTokenRepository>(_ => new RefreshTokenRepository(connectionString));
         services.AddSingleton<IPortRepository>(_ => new PortRepository(connectionString));
         services.AddSingleton<IBerthRepository>(_ => new BerthRepository(connectionString));
         services.AddSingleton<IShipRepository>(_ => new ShipRepository(connectionString));
@@ -30,7 +33,8 @@ public static class DependencyInjection
         services.AddSingleton<DatabaseInitializer>(sp => new DatabaseInitializer(
             connectionString,
             sp.GetRequiredService<IPasswordHasher>(),
-            seed));
+            seed,
+            seedDemoEnabled));
         return services;
     }
 }

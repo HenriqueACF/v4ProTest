@@ -140,8 +140,8 @@ public sealed class FuncionariosUseCaseTests
         var active = (await useCase.ExecuteAsync(true)).Value!;
         var all = (await useCase.ExecuteAsync(false)).Value!;
 
-        Assert.Single(active);
-        Assert.Equal(2, all.Count);
+        Assert.Single(active.Items);
+        Assert.Equal(2, all.Items.Count);
     }
 
     [Fact]
@@ -174,8 +174,13 @@ public sealed class FuncionariosUseCaseTests
         public Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_accounts.FirstOrDefault(a => a.User.Id == id));
 
-        public Task<List<UserAccount>> ListAsync(bool activeOnly, CancellationToken ct = default) =>
-            Task.FromResult(_accounts.Where(a => !activeOnly || a.User.IsActive).ToList());
+        public Task<List<UserAccount>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default) =>
+            Task.FromResult(_accounts.Where(a => !activeOnly || a.User.IsActive).Skip((page - 1) * pageSize).Take(pageSize).ToList());
+
+        public Task<int> CountAsync(bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_accounts.Count(a => !activeOnly || a.User.IsActive));
+
+        public Task UpdatePasswordAsync(Guid userId, PasswordHash hash, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task AddAsync(User user, CancellationToken ct = default)
         {

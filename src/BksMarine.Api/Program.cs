@@ -13,11 +13,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 var seed = builder.Configuration.GetSection("SeedAdmin").Get<SeedAdminOptions>() ?? new SeedAdminOptions();
+var seedDemoEnabled = builder.Configuration.GetSection("SeedDemo").Get<SeedDemoOptions>()?.Enabled ?? false;
 var connectionString = builder.Configuration.GetConnectionString("Postgres")
     ?? throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(connectionString, jwt, seed);
+builder.Services.AddInfrastructure(connectionString, jwt, seed, seedDemoEnabled);
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

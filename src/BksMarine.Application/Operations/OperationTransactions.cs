@@ -7,6 +7,7 @@ public sealed record RegisterOperationTransaction(
     Guid ShipId,
     Guid PortId,
     Guid BerthId,
+    Guid? ResponsibleUserId,
     string? AgencyName,
     string? PilotName,
     DateTime? PilotBoardingTime,
@@ -31,6 +32,7 @@ public sealed record OperationResult(
     Guid ShipId,
     Guid PortId,
     Guid BerthId,
+    Guid? ResponsibleUserId,
     string? AgencyName,
     string? PilotName,
     DateTime? PilotBoardingTime,
@@ -49,3 +51,10 @@ public sealed record OperationResult(
     DateTime? UndockingTime,
     IReadOnlyList<string> Photos,
     TransmissionStatus TransmissionStatus);
+
+public sealed record OperationDetailResult(
+    OperationResult Operation,
+    string ShipName,
+    string PortName,
+    string BerthName,
+    string? ResponsibleName);

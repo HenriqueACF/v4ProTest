@@ -41,32 +41,35 @@ Regra central: **o Core não importa SDK do Supabase nem ORM**. Supabase/Dapper 
 src/
   BksMarine.slnx
   BksMarine.Core/
-    Domain/Users/        User, Email, PasswordHash, UserAccount
+    Domain/Users/        User, Email, PasswordHash, UserAccount, RefreshToken
     Domain/Profiles/     Profile, ProfileName, Module
     Domain/Locations/    Port, Berth, PortCode, BerthType
     Domain/Operations/   Ship, Operation, OperationType, Side, TransmissionStatus,
                          OperationReportRow, OperationReportData
     Domain/Ports/        IUserRepository, IPasswordHasher, ITokenService,
                          IPortRepository, IBerthRepository, IShipRepository,
-                         IOperationRepository, IStorageClient, IReportGenerator
+                         IOperationRepository, IStorageClient, IReportGenerator,
+                         ILoginAttemptRepository, IRefreshTokenRepository
   BksMarine.Application/
-    Common/Result.cs     Result, Result<T>, Error
-    Auth/                AuthenticateUser, AuthenticateTransaction, AuthenticationResult
+    Common/Result.cs     Result, Result<T>, Error, PageResult<T>, Paging
+    Auth/                AuthenticateUser, AuthenticateTransaction, AuthenticationResult,
+                         RefreshSession, LogoutSession, ResetPassword, AuthThrottleOptions, Hashing
     Locations/           CreatePort/Berth, UpdatePort/Berth, DeactivatePort/Berth,
                          ListPorts, ListBerthsByPort, transactions, results
     Employees/           CreateEmployee, UpdateEmployee, DeactivateEmployee,
                          ListEmployees, ListProfiles, transactions, results
     Operations/          CreateShip, UpdateShip, DeactivateShip, ListShips,
-                         RegisterOperation, ListOperations, GetOperation, MarkTransmitted
+                         RegisterOperation, ListOperations, GetOperationDetail, MarkTransmitted
     Reports/             GenerateOperationReport
     DependencyInjection.cs
   BksMarine.Infrastructure/
     Data/                UserRepository, PortRepository, BerthRepository,
-                         ShipRepository, OperationRepository
+                         ShipRepository, OperationRepository,
+                         LoginAttemptRepository, RefreshTokenRepository
     Auth/                BCryptPasswordHasher, JwtTokenService
     Storage/             LocalStorageClient (dev)
     Reports/             QuestPdfReportGenerator
-    Db/                  Schema (DDL + seed), DatabaseInitializer
+    Db/                  Migrations (001_baseline), DatabaseInitializer
     DependencyInjection.cs
   BksMarine.Api/
     Controllers/         AuthController, PortsController, BerthsController,
@@ -77,7 +80,8 @@ src/
 tests/
   BksMarine.Tests/       AuthenticateUserTests, CadastrosUseCaseTests,
                          FuncionariosUseCaseTests, OperacoesUseCaseTests,
-                         RelatoriosUseCaseTests
+                         RelatoriosUseCaseTests, FeaturesAddOnTests,
+                         ShipAndDetailTests, AuthAdvTests
 ```
 
 ## Bounded Contexts
@@ -136,6 +140,8 @@ Response `200 OK`:
 {
   "token": "<jwt>",
   "expiresAt": "2026-08-20T02:00:00Z",
+  "refreshToken": "<opaque>",
+  "refreshExpiresAt": "2026-09-02T02:00:00Z",
   "profile": "Full",
   "menu": ["Configuration", "Operations", "Reports"]
 }
@@ -148,8 +154,20 @@ Erros:
 | `validation.email` | 400 | e-mail ausente ou em formato inválido |
 | `validation.password` | 400 | senha ausente |
 | `auth.invalid_credentials` | 401 | e-mail inexistente, senha errada ou usuário inativo (mesma resposta) |
+| `auth.throttled` | 429 | 5 falhas em 15 min — bloqueio temporário |
 
 Claims do JWT: `userId`, `email`, `perfil`.
+
+### Sessão (refresh token)
+
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| POST | `/auth/refresh` | — | troca refresh válido por novo par (rotação; o usado é revogado) |
+| POST | `/auth/logout` | token | revoga o refresh token da sessão |
+| POST | `/auth/reset-password` | token | troca a senha (`currentPassword` + `newPassword` ≥ 8) |
+
+- Refresh token é **opaco**, armazenado como hash SHA-256; expira em 14 dias (configurável).
+- **Rate limiting** de login em `login_attempts` (5 falhas/15 min → 429; limpo no sucesso).
 
 ## Feature implementada — Cadastros (Portos/Berços)
 
@@ -217,16 +235,18 @@ Fonte de verdade: `specs/features/FEAT-operacoes.md`.
 
 ### Domínio
 
-- **`Ship`**: `Name`, `Loa`, `Dwt` (ambos > 0), `IsActive`. Cadastro próprio.
+- **`Ship`**: `Name` (**único**), `Loa`, `Dwt` (ambos > 0), `IsActive`. Cadastro próprio.
 - **`Operation`** (aggregate root): `Type` (Docking/Undocking), `ShipId`, `PortId`, `BerthId`,
-  dados da manobra (agência, prático, rebocadores proa/popa, 1º/último cabo, calados proa/meio/popa,
-  bordo `Port`/`Starboard`, observações, `OccurredAt`), `UndockingTime?` (só desatracação),
-  `Photos` (≤6 URLs), `TransmissionStatus`.
+  `ResponsibleUserId?` (funcionário responsável), dados da manobra (agência, prático,
+  rebocadores proa/popa, 1º/último cabo, calados proa/meio/popa, bordo `Port`/`Starboard`,
+  observações, `OccurredAt`), `UndockingTime?` (só desatracação), `Photos` (≤6 URLs),
+  `TransmissionStatus`.
 - **`TransmissionStatus`**: `NotTransmitted` → `Transmitted`.
 
 ### Regras e invariantes
 
 - Berço deve pertencer ao porto informado; ship/porto/berço devem existir e estar **ativos**.
+- Nome de navio **único**; responsável, se informado, deve existir.
 - 1º cabo < último cabo (se ambos); calados ≥ 0; desatracação exige `undockingTime`.
 - Máximo **6 fotos**; falha de upload aborta o registro.
 
@@ -242,8 +262,13 @@ Fonte de verdade: `specs/features/FEAT-operacoes.md`.
 | GET | `/ships?activeOnly=true` | autenticado |
 | POST/PUT/DELETE | `/ships` | Full |
 | POST | `/operations` | Full |
-| GET | `/operations` / `/operations/{id}` | autenticado |
+| GET | `/operations` (paginado, filtros tipo/período) | autenticado |
+| GET | `/operations/{id}` | autenticado |
 | POST | `/operations/{id}/transmit` | Full |
+
+`GET /operations/{id}` retorna **detalhe com nomes**: `shipName`, `portName`, `berthName`, `responsibleName`.
+Listagens (`/ports`, `/ports/{id}/berths`, `/operations`, `/employees`) suportam `?page&pageSize`
+(1–100; resposta `{items, page, pageSize, total, totalPages}`).
 
 Fotos: adapter `IStorageClient` — **dev** grava em disco `uploads/`; produção (Supabase Storage) é D6 em aberto.
 Transmissão: status simples no MVP (sem fila — D7 em aberto).
@@ -252,44 +277,51 @@ Transmissão: status simples no MVP (sem fila — D7 em aberto).
 
 Fonte de verdade: `specs/features/FEAT-relatorios.md`.
 
-- **`GET /operations/report`** gera PDF (QuestPDF) com filtros `from`/`to`/`type`/`portId`.
-- Cabeçalho com filtros, tabela (data, tipo, navio, porto, berço, status) e **fotos embutidas**
+- **`GET /operations/report`** gera PDF (QuestPDF) com filtros `from`/`to`/`type`/`portId`/`responsibleUserId`.
+- Cabeçalho com filtros, tabela (data, tipo, navio, porto, berço, **responsável**, status) e **fotos embutidas**
   (quando o arquivo local existe; caso contrário, marcador de indisponível).
 - Retorna `application/pdf` p/ download.
 - `from > to` → `validation.period` (400). Acesso: qualquer perfil autenticado.
 
 ## Banco de dados
 
-Schema e seed em [`src/BksMarine.Infrastructure/Db/Schema.cs`](src/BksMarine.Infrastructure/Db/Schema.cs), aplicados de forma idempotente pelo `DatabaseInitializer` na subida (dev).
+**Migrations versionadas** em [`src/BksMarine.Infrastructure/Db/Migrations.cs`](src/BksMarine.Infrastructure/Db/Migrations.cs):
+tabela `schema_migrations` + runner aplica pendentes em ordem, em transação, na subida (dev).
+`001_baseline` contém todo o schema + seed de perfis.
 
 ```sql
-profiles        (id uuid PK, name text UNIQUE)
-users           (id uuid PK, name text NOT NULL DEFAULT '', job_title text,
-                 email text UNIQUE, password_hash text,
-                 profile_id uuid FK → profiles, is_active bool DEFAULT TRUE)
-profile_modules (profile_id uuid FK → profiles, module text, PK (profile_id, module))
-ports           (id uuid PK, name text, code text UNIQUE, address text, contact text,
-                 notes text, is_active bool DEFAULT TRUE)
-berths          (id uuid PK, name text, port_id uuid FK → ports,
-                 max_loa numeric, max_dwt numeric, type text, notes text,
-                 is_active bool DEFAULT TRUE, UNIQUE (port_id, name))
-ships           (id uuid PK, name text, loa numeric NOT NULL, dwt numeric NOT NULL,
-                 is_active bool DEFAULT TRUE)
-operations      (id uuid PK, type text, ship_id uuid FK → ships,
-                 port_id uuid FK → ports, berth_id uuid FK → berths,
-                 agency_name text, pilot_name text, pilot_boarding_time timestamptz,
-                 tug_bow_name text, tug_bow_time timestamptz,
-                 tug_stern_name text, tug_stern_time timestamptz,
-                 first_line_time timestamptz, last_line_time timestamptz,
-                 draft_bow numeric, draft_midship numeric, draft_stern numeric,
-                 side text, notes text, occurred_at timestamptz NOT NULL,
-                 undocking_time timestamptz, photos text[] DEFAULT '{}',
-                 transmission_status text DEFAULT 'NotTransmitted',
-                 created_at timestamptz DEFAULT now())
+profiles          (id uuid PK, name text UNIQUE)
+users             (id uuid PK, name text NOT NULL DEFAULT '', job_title text,
+                   email text UNIQUE, password_hash text,
+                   profile_id uuid FK → profiles, is_active bool DEFAULT TRUE)
+profile_modules   (profile_id uuid FK → profiles, module text, PK (profile_id, module))
+ports             (id uuid PK, name text, code text UNIQUE, address text, contact text,
+                   notes text, is_active bool DEFAULT TRUE)
+berths            (id uuid PK, name text, port_id uuid FK → ports,
+                   max_loa numeric, max_dwt numeric, type text, notes text,
+                   is_active bool DEFAULT TRUE, UNIQUE (port_id, name))
+ships             (id uuid PK, name text, loa numeric NOT NULL, dwt numeric NOT NULL,
+                   is_active bool DEFAULT TRUE)
+operations        (id uuid PK, type text, ship_id uuid FK → ships,
+                   port_id uuid FK → ports, berth_id uuid FK → berths,
+                   responsible_user_id uuid FK → users,
+                   agency_name text, pilot_name text, pilot_boarding_time timestamptz,
+                   tug_bow_name text, tug_bow_time timestamptz,
+                   tug_stern_name text, tug_stern_time timestamptz,
+                   first_line_time timestamptz, last_line_time timestamptz,
+                   draft_bow numeric, draft_midship numeric, draft_stern numeric,
+                   side text, notes text, occurred_at timestamptz NOT NULL,
+                   undocking_time timestamptz, photos text[] DEFAULT '{}',
+                   transmission_status text DEFAULT 'NotTransmitted',
+                   created_at timestamptz DEFAULT now())
+login_attempts    (email text, attempted_at timestamptz DEFAULT now(), success bool)
+refresh_tokens    (id uuid PK, user_id uuid FK → users, token_hash text UNIQUE,
+                   expires_at timestamptz, revoked_at timestamptz,
+                   created_at timestamptz DEFAULT now())
 ```
 
-Seed estático: 3 perfis + mapeamento de módulos (`Full` → 3 módulos, `Operational` → 2, `Common` → 1).
-Seed dinâmico: se `users` estiver vazia, cria um administrador (perfil `Full`) com credenciais do config.
+Seed de perfis (3 + módulos) + **admin** (se `users` vazia, perfil `Full`). **Seed de exemplo** (`SeedDemo:Enabled`,
+default true em dev): 2 portos, berços e 2 navios — só se `ports` vazia.
 
 ## Configuração
 
@@ -304,7 +336,8 @@ Via `appsettings.json` ou variável de ambiente (override padrão do ASP.NET).
 | `Jwt:ExpirationMinutes` | `Jwt__ExpirationMinutes` | `480` (8h) | expiração do token |
 | `SeedAdmin:Email` | `SeedAdmin__Email` | `admin@bksmarine.com` | e-mail do admin seed |
 | `SeedAdmin:Password` | `SeedAdmin__Password` | `Admin@123` | senha do admin seed |
-| `Database:InitializeOnStartup` | `Database__InitializeOnStartup` | `true` | aplica schema + seed na subida |
+| `SeedDemo:Enabled` | `SeedDemo__Enabled` | `true` (dev) | seed de exemplo (portos/berços/navios) |
+| `Database:InitializeOnStartup` | `Database__InitializeOnStartup` | `true` | aplica migrations + seeds na subida |
 
 ## Como rodar
 
@@ -312,7 +345,7 @@ Via `appsettings.json` ou variável de ambiente (override padrão do ASP.NET).
 # build
 dotnet build src/BksMarine.slnx
 
-# testes (61 unitários — ports fake in-memory, sem banco)
+# testes (82 unitários — ports fake in-memory, sem banco)
 dotnet test src/BksMarine.slnx
 
 # executar (precisa de Postgres/Supabase acessível)
@@ -334,23 +367,27 @@ export ConnectionStrings__Postgres="Host=...;Port=...;Database=...;Username=...;
 | 0004 | Estrutura **MultiProject** (Core/Application/Infrastructure/Api) | aceito |
 | 0005 | Idioma do código: **inglês** | aceito |
 | D8 | Relatórios PDF: **QuestPDF** (Community) | aceito |
-| D5–D7, D9–D12 | RLS x RBAC, fotos Storage (produção), transmissão (fila), escopo repo, multi-tenant, refresh token, menu no login vs `/me` | em aberto |
+| D11 | Auth: **refresh token** (rotação) + **rate limiting** de login implementados; menu retornado no login | implementado |
+| D5–D7, D9–D10, D12 | RLS x RBAC, fotos Storage (produção), transmissão (fila), escopo repo, multi-tenant | em aberto |
 
 > ADRs em [`decisions/`](decisions/). Detalhamento das abertas em [`docs/design/decisoes-abertas.md`](docs/design/decisoes-abertas.md).
 
 ## Testes
 
-**61 testes** (`tests/BksMarine.Tests/`, ports fake in-memory + gerador PDF real, sem banco):
+**82 testes** (`tests/BksMarine.Tests/`, ports fake in-memory + gerador PDF real, sem banco):
 
 - `AuthenticateUserTests` — login, menu por perfil, credenciais inválidas genéricas, validação.
-- `CadastrosUseCaseTests` — CRUD porto/berço, unicidade (código/nome), inativação, capacidade.
-- `FuncionariosUseCaseTests` — criação (com email duplicado), hash de senha, perfis, inativação.
+- `CadastrosUseCaseTests` — CRUD porto/berço, unicidade (código/nome), inativação, capacidade, paginação.
+- `FuncionariosUseCaseTests` — criação (com email duplicado), hash de senha, perfis, inativação, paginação.
 - `OperacoesUseCaseTests` — registro de atracação/desatracação, invariantes (berço do porto,
   horários de cabo, calados, fotos ≤6, storage falha), transmissão idempotente.
 - `RelatoriosUseCaseTests` — filtros repassados, período inválido, PDF válido (QuestPDF real).
+- `FeaturesAddOnTests` — paginação (normalização/total), reset de senha, responsável na operação.
+- `ShipAndDetailTests` — unicidade de navio, detalhe enriquecido com nomes.
+- `AuthAdvTests` — throttle de login, emissão/rotação de refresh token, logout.
 
 ## Próximos passos
 
 1. Conectar Postgres/Supabase real e validar o fluxo completo ponta a ponta (login → cadastros → operação → relatório).
-2. Fechar decisões em aberto: D6 (Supabase Storage em produção), D7 (transmissão com fila).
-3. Transmissão efetiva p/ sistema externo e compartilhamento de relatórios (HU08 além do status).
+2. **Transmissão efetiva** p/ sistema externo (HU08) — definir destino/formato.
+3. Fechar decisões em aberto: D6 (Supabase Storage em produção), D7 (transmissão com fila).

@@ -3,6 +3,8 @@ using BksMarine.Application.Operations;
 using BksMarine.Core.Domain.Locations;
 using BksMarine.Core.Domain.Operations;
 using BksMarine.Core.Domain.Ports;
+using BksMarine.Core.Domain.Profiles;
+using BksMarine.Core.Domain.Users;
 using Xunit;
 
 namespace BksMarine.Tests;
@@ -43,7 +45,7 @@ public sealed class OperacoesUseCaseTests
 
     private static RegisterOperationTransaction Docking() =>
         new(
-            OperationType.Docking, ShipId, PortId, BerthId,
+            OperationType.Docking, ShipId, PortId, BerthId, null,
             "Agência X", "Piloto A", DateTime.UtcNow.AddHours(-2),
             "Tug Proa", DateTime.UtcNow.AddHours(-1), "Tug Popa", DateTime.UtcNow.AddHours(-1),
             DateTime.UtcNow.AddHours(-1), DateTime.UtcNow,
@@ -174,13 +176,15 @@ public sealed class OperacoesUseCaseTests
         FakeShipRepository? ships = null,
         FakePortRepository? ports = null,
         FakeBerthRepository? berths = null,
-        IStorageClient? storage = null) =>
+        IStorageClient? storage = null,
+        IUserRepository? users = null) =>
         new(
             operations ?? new FakeOperationRepository(),
             ships ?? new FakeShipRepository(NewShip()),
             ports ?? new FakePortRepository(NewPort(PortId)),
             berths ?? new FakeBerthRepository(NewBerth(BerthId, PortId)),
-            storage ?? new FakeStorage());
+            storage ?? new FakeStorage(),
+            users ?? new FakeUserRepository());
 
     private static Ship NewShip(bool inactive = false) => new(ShipId, "Pomone", 128m, 5000m, !inactive);
 
@@ -209,12 +213,15 @@ public sealed class OperacoesUseCaseTests
         public Task<Operation?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_operations.FirstOrDefault(o => o.Id == id));
 
-        public Task<List<Operation>> ListAsync(OperationType? type, DateTime? from, DateTime? to, CancellationToken ct = default) =>
+        public Task<List<Operation>> ListAsync(OperationType? type, DateTime? from, DateTime? to, int page, int pageSize, CancellationToken ct = default) =>
             Task.FromResult(_operations.ToList());
 
-        public Task<List<OperationReportRow>> ListReportAsync(OperationType? type, DateTime? from, DateTime? to, Guid? portId, CancellationToken ct = default) =>
+        public Task<int> CountAsync(OperationType? type, DateTime? from, DateTime? to, CancellationToken ct = default) =>
+            Task.FromResult(_operations.Count);
+
+        public Task<List<OperationReportRow>> ListReportAsync(OperationType? type, DateTime? from, DateTime? to, Guid? portId, Guid? responsibleUserId, CancellationToken ct = default) =>
             Task.FromResult(_operations.Select(o => new OperationReportRow(
-                o.Id, o.OccurredAt, o.Type, "Ship", "Port", "Berth", o.TransmissionStatus, o.Photos)).ToList());
+                o.Id, o.OccurredAt, o.Type, "Ship", "Port", "Berth", "Responsável", o.TransmissionStatus, o.Photos)).ToList());
 
         public Task AddAsync(Operation operation, CancellationToken ct = default)
         {
@@ -242,6 +249,9 @@ public sealed class OperacoesUseCaseTests
         public Task<Ship?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(_ships.FirstOrDefault(s => s.Id == id));
 
+        public Task<Ship?> GetByNameAsync(string name, CancellationToken ct = default) =>
+            Task.FromResult(_ships.FirstOrDefault(s => s.Name == name));
+
         public Task<List<Ship>> ListAsync(bool activeOnly, CancellationToken ct = default) =>
             Task.FromResult(_ships.ToList());
 
@@ -264,7 +274,8 @@ public sealed class OperacoesUseCaseTests
             Task.FromResult(_ports.FirstOrDefault(p => p.Id == id));
 
         public Task<Port?> GetByCodeAsync(string code, CancellationToken ct = default) => Task.FromResult<Port?>(null);
-        public Task<List<Port>> ListAsync(bool activeOnly, CancellationToken ct = default) => Task.FromResult(_ports);
+        public Task<List<Port>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default) => Task.FromResult(_ports);
+        public Task<int> CountAsync(bool activeOnly, CancellationToken ct = default) => Task.FromResult(_ports.Count);
         public Task AddAsync(Port port, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAsync(Port port, CancellationToken ct = default) => Task.CompletedTask;
     }
@@ -281,10 +292,26 @@ public sealed class OperacoesUseCaseTests
         public Task<Berth?> GetByNameInPortAsync(string name, Guid portId, CancellationToken ct = default) =>
             Task.FromResult<Berth?>(null);
 
-        public Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default) =>
+        public Task<List<Berth>> ListByPortAsync(Guid portId, bool activeOnly, int page, int pageSize, CancellationToken ct = default) =>
             Task.FromResult(_berths.ToList());
+
+        public Task<int> CountByPortAsync(Guid portId, bool activeOnly, CancellationToken ct = default) =>
+            Task.FromResult(_berths.Count);
 
         public Task AddAsync(Berth berth, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateAsync(Berth berth, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class FakeUserRepository : IUserRepository
+    {
+        public Task<UserAccount?> GetByEmailAsync(Email email, CancellationToken ct = default) => Task.FromResult<UserAccount?>(null);
+        public Task<UserAccount?> GetByIdAsync(Guid id, CancellationToken ct = default) => Task.FromResult<UserAccount?>(null);
+        public Task<List<UserAccount>> ListAsync(bool activeOnly, int page, int pageSize, CancellationToken ct = default) => Task.FromResult(new List<UserAccount>());
+        public Task<int> CountAsync(bool activeOnly, CancellationToken ct = default) => Task.FromResult(0);
+        public Task AddAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpdateAsync(User user, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpdatePasswordAsync(Guid userId, PasswordHash hash, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<Profile?> GetProfileByIdAsync(Guid profileId, CancellationToken ct = default) => Task.FromResult<Profile?>(null);
+        public Task<List<Profile>> GetAllProfilesAsync(CancellationToken ct = default) => Task.FromResult(new List<Profile>());
     }
 }

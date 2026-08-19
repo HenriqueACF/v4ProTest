@@ -35,9 +35,13 @@ public sealed class PortsController : ControllerBase
 
     [HttpGet]
     [Authorize]
-    public async Task<IActionResult> List([FromQuery] bool activeOnly = true, CancellationToken ct = default)
+    public async Task<IActionResult> List(
+        [FromQuery] bool activeOnly = true,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        CancellationToken ct = default)
     {
-        var result = await _list.ExecuteAsync(activeOnly, ct);
+        var result = await _list.ExecuteAsync(activeOnly, page, pageSize, ct);
         return Ok(result.Value);
     }
 
@@ -71,9 +75,14 @@ public sealed class PortsController : ControllerBase
 
     [HttpGet("{portId:guid}/berths")]
     [Authorize]
-    public async Task<IActionResult> ListBerths(Guid portId, [FromQuery] bool activeOnly = true, CancellationToken ct = default)
+    public async Task<IActionResult> ListBerths(
+        Guid portId,
+        [FromQuery] bool activeOnly = true,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        CancellationToken ct = default)
     {
-        var result = await _listBerths.ExecuteAsync(portId, activeOnly, ct);
+        var result = await _listBerths.ExecuteAsync(portId, activeOnly, page, pageSize, ct);
         return Ok(result.Value);
     }
 
